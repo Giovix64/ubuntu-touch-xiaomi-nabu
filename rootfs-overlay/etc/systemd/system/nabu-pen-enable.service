@@ -1,0 +1,11 @@
+[Unit]
+Description=Xiaomi Pen: abilita l'input penna nel touch NVT (default spento senza framework Xiaomi)
+After=lxc-android-config.service
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sh -c 'for i in $(seq 60); do [ -c /dev/xiaomi-touch ] && exit 0; sleep 1; done; exit 1'
+ExecStart=/usr/bin/python3 /usr/local/bin/nabu-pen-enable 1
+
+[Install]
+WantedBy=multi-user.target

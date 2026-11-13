@@ -1,0 +1,24 @@
+nabu:
+  Names:
+    - nabu
+    - Xiaomi Pad 5
+  PrettyName: Xiaomi Pad 5
+  DeviceType: tablet
+  GridUnit: 18
+  # Pannello nativamente verticale (1600x2560, montato di lato): PrimaryOrientation = orientamento NATIVO.
+  # Con Landscape menu a comparsa e tastiera venivano disegnati ruotati/fuori schermo.
+  PrimaryOrientation: Portrait
+  SupportedOrientations:
+    - Portrait
+    - InvertedPortrait
+    - Landscape
+    - InvertedLandscape
+  MirAndroidPlatformServerBackpressure:
+    - false
+  MirAndroidPlatformServerPartialUpdates:
+    - true
+  MirAndroidPlatformServerEglSync:
+    - false
+  MirAndroidPlatformClientEglFlush:
+    - "!/usr/bin/unity8,!/usr/bin/lomiri,all"
+  FilesystemEncryption: false

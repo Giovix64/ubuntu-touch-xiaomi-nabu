@@ -1,0 +1,26 @@
+#!/bin/sh
+# Drawer di Lomiri: mostra solo le app Android installate dall'utente (+ l'icona "Waydroid").
+# Il pacchetto Waydroid di UT scrive NoDisplay=true in ogni launcher e lo riscrive a ogni
+# sessione/installazione. Lanciato da nabu-waydroid-apps.path (root: /data/app di Android
+# non e' leggibile da phablet). Un'app e' "dell'utente" se il suo APK sta in /data/app.
+# Modifica solo i file che cambiano (cosi' il .path non si riattiva all'infinito).
+U=phablet
+H=/home/$U
+D=$H/.local/share/applications
+A=$H/.local/share/waydroid/data/app
+ALWAYS="com.android.vending"          # Play Store (immagine GAPPS: app di sistema)
+for f in "$D"/waydroid.*.desktop; do
+    [ -f "$f" ] || continue
+    pkg=${f##*/waydroid.}; pkg=${pkg%.desktop}
+    want=true
+    case " $ALWAYS " in *" $pkg "*) want=false ;; esac
+    ls -d "$A"/*/"$pkg"-* >/dev/null 2>&1 && want=false
+    grep -q "^NoDisplay=$want\$" "$f" && continue
+    if grep -q '^NoDisplay=' "$f"; then
+        sed "s/^NoDisplay=.*/NoDisplay=$want/" "$f" > "$f.nabu" 
+    else
+        sed "/^\[Desktop Entry\]/a NoDisplay=$want" "$f" > "$f.nabu"
+    fi
+    chown $U:$U "$f.nabu"; chmod 644 "$f.nabu"; mv "$f.nabu" "$f"
+done
+exit 0

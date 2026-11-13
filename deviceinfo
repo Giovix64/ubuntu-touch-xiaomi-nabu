@@ -1,0 +1,49 @@
+deviceinfo_name="Xiaomi Pad 5"
+deviceinfo_manufacturer="Xiaomi"
+deviceinfo_codename="nabu"
+deviceinfo_arch="aarch64"
+deviceinfo_halium_version="13"
+
+# Kernel: Droidian nabu (base ArrowOS 13.1, 4.14.180) + halium.config, copia locale.
+# Quando ci sarà un fork pubblico, sostituire con l'URL git.
+deviceinfo_kernel_source="https://github.com/Giovix64/linux-android-xiaomi-nabu.git"
+deviceinfo_kernel_source_branch="halium-13.0"
+deviceinfo_kernel_defconfig="nabu_droidian_defconfig halium.config"
+deviceinfo_kernel_clang_compile="true"
+# Stessa toolchain della prima build riuscita (quella di default per Halium 13 è r450784e)
+deviceinfo_kernel_clang_branch="android12L-gsi"
+deviceinfo_kernel_clang_revision="r416183b"
+# Come lo stock: Image non compresso, senza dtb in coda (il dtb sta in vendor_boot).
+# Il defconfig Droidian ha BUILD_ARM64_APPENDED_DTB_IMAGE=y, quindi non viene prodotto Image.gz.
+deviceinfo_kernel_image_name="Image"
+
+# Command line: vendor cmdline stock (HyperOS OS1.0.6.0.TKXEUXM) senza la console seriale
+# (lenta, cfr. port Pixel 5) + console=tty0 (obbligatorio) + ramoops_memreserve=4M (pstore Xiaomi a 0xB0000000, log dopo i crash in /sys/fs/pstore).
+# NIENTE systempart=: ha la precedenza su /data/ubuntu.img e farebbe montare system_a (EROFS Android) come rootfs.
+deviceinfo_kernel_cmdline=""
+deviceinfo_kernel_vendor_cmdline="androidboot.hardware=qcom androidboot.console=ttyMSM0 androidboot.memcg=1 lpm_levels.sleep_disabled=1 video=vfb:640x400,bpp=32,memsize=3072000 msm_rtb.filter=0x237 service_locator.enable=1 swiotlb=2048 loop.max_part=7 androidboot.usbcontroller=a600000.dwc3 buildvariant=user printk.devkmsg=on console=tty0 ramoops_memreserve=4M"
+
+# Boot image header v3: boot + vendor_boot (valori da 20261112_Valori_stock_nabu.md)
+deviceinfo_bootimg_header_version="3"
+deviceinfo_bootimg_os_version="13.0.0"
+deviceinfo_bootimg_os_patch_level="2024-10"
+deviceinfo_flash_pagesize="4096"
+deviceinfo_flash_offset_base="0x00000000"
+deviceinfo_flash_offset_kernel="0x00008000"
+deviceinfo_flash_offset_ramdisk="0x01000000"
+deviceinfo_flash_offset_second="0x00000000"
+deviceinfo_flash_offset_tags="0x00000100"
+deviceinfo_flash_offset_dtb="0x01f00000"
+deviceinfo_bootimg_qcdt="false"
+deviceinfo_bootimg_partition_size="134217728"
+deviceinfo_vendor_boot_partition_size="100663296"
+deviceinfo_system_partition_size="6144M"
+
+# Primo avvio: dtb stock in vendor_boot; dtbo stock lasciato sul tablet (nessun dtbo.img generato)
+deviceinfo_bootimg_prebuilt_dtb="prebuilt/stock-vendor_boot.dtb"
+
+# A/B senza partizione recovery
+deviceinfo_has_recovery_partition="false"
+
+deviceinfo_rootfs_image_sector_size="4096"
+deviceinfo_use_overlaystore="true"

@@ -1,0 +1,64 @@
+#!/usr/bin/python3
+"""Accende l'input della Xiaomi Pen nel touch NVT (driver: pen_input_dev_enable=0 di default;
+su HyperOS lo accende il framework Xiaomi).
+
+ioctl /dev/xiaomi-touch: nr=SET_CUR_VALUE(0), buf int[6] = {mode=Touch_Pen_ENABLE(20), valore}.
+
+All'avvio il driver ricarica il firmware del controller (~25 s dopo il boot, workqueue
+BOOT_UPDATE_FIRMWARE) e il reset del chip cancella l'accensione; il driver la riapplica da
+solo solo ai resume. Quindi: si aspetta nel log del kernel "Update firmware success" e si
+accende DOPO (con --now si accende subito e basta).
+uso: nabu-pen-enable [1|0] [--now]
+"""
+import fcntl, struct, sys, os, time
+
+val = 1
+now = "--now" in sys.argv
+for a in sys.argv[1:]:
+    if a in ("0", "1"):
+        val = int(a)
+
+def pen_enable(v):
+    IOC = (0 << 30) | (6 * 4 << 16) | (ord('T') << 8) | 0
+    buf = bytearray(struct.pack('6i', 20, v, 0, 0, 0, 0))
+    fd = os.open('/dev/xiaomi-touch', os.O_RDWR)
+    try:
+        fcntl.ioctl(fd, IOC, buf, True)
+    finally:
+        os.close(fd)
+    print("pen enable =", v, flush=True)
+
+def fw_loaded(timeout):
+    """True quando nel log del kernel c'e' (o compare) il caricamento firmware NVT."""
+    fd = os.open("/dev/kmsg", os.O_RDONLY | os.O_NONBLOCK)
+    end = time.monotonic() + timeout
+    try:
+        while time.monotonic() < end:
+            try:
+                rec = os.read(fd, 8192).decode(errors="replace")
+            except BlockingIOError:
+                time.sleep(0.5)
+                continue
+            except OSError:          # record sovrascritto (EPIPE): si continua
+                continue
+            if "nvt_update_firmware" in rec and "Update firmware success" in rec:
+                return True
+    finally:
+        os.close(fd)
+    return False
+
+for _ in range(60):
+    if os.path.exists("/dev/xiaomi-touch"):
+        break
+    time.sleep(1)
+
+if now or val == 0:
+    pen_enable(val)
+    sys.exit(0)
+
+pen_enable(val)                      # subito (se il firmware e' gia' carico basta questo)
+if fw_loaded(120):
+    time.sleep(0.5)
+    pen_enable(val)                  # di nuovo dopo il reset del firmware
+else:
+    print("caricamento firmware NVT non visto nel log: accensione fatta una volta sola", flush=True)

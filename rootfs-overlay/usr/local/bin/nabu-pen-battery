@@ -1,0 +1,114 @@
+#!/usr/bin/python3
+"""Notifiche batteria Xiaomi Pen 2 (servizio utente della sessione Lomiri).
+
+La carica via magnete e' gestita dal kernel (idtp9418, ricarica inversa): qui si
+leggono solo stato e percentuale da /sys/class/power_supply/wireless e si avvisa:
+- penna agganciata: "in carica, N%"
+- carica completa (100%)
+- penna staccata: percentuale (avviso se bassa)
+La percentuale e' leggibile solo mentre la penna e' agganciata (fuori vale un
+default fittizio), quindi si ricorda l'ultimo valore valido.
+"""
+import os, socket, subprocess, time
+
+PS = "/sys/class/power_supply/wireless/"
+CHARGING = 4          # reverse_pen_chg_state: 4 = penna in carica, 2 = staccata
+LOW = 20
+STATE_FILE = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "nabu-pen-battery")
+
+def rd(name):
+    try:
+        return int(open(PS + name).read().strip())
+    except (OSError, ValueError):
+        return None
+
+def icon(soc, charging):
+    n = min(100, max(0, int(round(soc / 10.0)) * 10))
+    return "battery-%03d%s" % (n, "-charging" if charging else "")
+
+# Connessione D-Bus persistente: Lomiri cancella le notifiche di un client appena
+# questo si disconnette dal bus (con gdbus la bolla sparirebbe subito).
+_bus = None
+def notify(summary, body, ico):
+    global _bus
+    from gi.repository import Gio, GLib
+    for _ in range(2):
+        try:
+            if _bus is None or _bus.is_closed():
+                _bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+            _bus.call_sync("org.freedesktop.Notifications", "/org/freedesktop/Notifications",
+                           "org.freedesktop.Notifications", "Notify",
+                           GLib.Variant("(susssasa{sv}i)", ("Penna", 0, ico, summary, body, [], {}, -1)),
+                           None, 0, 5000, None)
+            return
+        except Exception as ex:
+            print("notifica fallita:", ex, flush=True)
+            _bus = None
+
+def save(text):
+    try:
+        open(STATE_FILE, "w").write(text + "\n")
+    except OSError:
+        pass
+
+def valid_soc():
+    s = rd("reverse_pen_soc")
+    return s if s is not None and 0 <= s <= 100 else None
+
+# uevent del kernel (power_supply): sveglia immediata ad aggancio/sgancio
+sk = socket.socket(socket.AF_NETLINK, socket.SOCK_DGRAM, 15)   # NETLINK_KOBJECT_UEVENT
+sk.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1 << 20)
+sk.bind((0, 1))
+
+last_soc = None
+full_notified = False
+state = rd("reverse_pen_chg_state")
+charging = state == CHARGING
+if charging:
+    last_soc = valid_soc()
+save("agganciata %s%%" % last_soc if charging else "staccata")
+
+while True:
+    sk.settimeout(30 if charging else None)
+    try:
+        sk.recv(8192)
+        time.sleep(0.3)
+        sk.setblocking(False)              # svuota la raffica di uevent
+        try:
+            while sk.recv(8192):
+                pass
+        except (BlockingIOError, OSError):
+            pass
+        sk.setblocking(True)
+    except socket.timeout:
+        pass
+    except OSError:                        # ENOBUFS: eventi persi, si rilegge lo stato
+        time.sleep(0.3)
+    st = rd("reverse_pen_chg_state")
+    now_charging = st == CHARGING
+    if now_charging and not charging:              # agganciata
+        soc = None
+        for _ in range(20):                         # la % arriva dopo ~1 s (prima vale 255)
+            soc = valid_soc()
+            if soc is not None:
+                break
+            time.sleep(0.5)
+        if soc is not None:
+            last_soc = soc
+        full_notified = soc == 100
+        notify("Penna agganciata", "In carica%s" % (": %d%%" % soc if soc is not None else ""),
+               icon(soc or 0, True))
+    elif now_charging:
+        soc = valid_soc()
+        if soc is not None:
+            last_soc = soc
+            if soc >= 100 and not full_notified:
+                full_notified = True
+                notify("Penna carica", "Batteria al 100%", icon(100, False))
+    elif charging and not now_charging:             # staccata
+        if last_soc is not None:
+            low = last_soc <= LOW
+            notify("Penna staccata", "Batteria %d%%%s" % (last_soc, " - carica bassa, riaggancia la penna" if low else ""),
+                   icon(last_soc, False))
+    charging = now_charging
+    save(("agganciata, in carica %s%%" if charging else "staccata, ultima lettura %s%%") % last_soc)

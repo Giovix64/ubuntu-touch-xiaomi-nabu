@@ -1,0 +1,13 @@
+[Unit]
+Description=Xiaomi Pen: ponte penna -> touchscreen virtuale (Mir 1.8 non gestisce le tavolette)
+After=nabu-pen-enable.service
+Wants=nabu-pen-enable.service
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/bin/nabu-pen-bridge
+Restart=always
+RestartSec=2s
+Nice=-10
+
+[Install]
+WantedBy=multi-user.target

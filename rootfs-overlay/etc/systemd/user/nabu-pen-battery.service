@@ -1,0 +1,12 @@
+[Unit]
+Description=Xiaomi Pen: notifiche batteria (aggancio/sgancio/carica completa)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/bin/nabu-pen-battery
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=graphical-session.target

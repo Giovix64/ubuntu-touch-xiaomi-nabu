@@ -1,0 +1,194 @@
+==============================================================================
+ UBUNTU TOUCH FOR XIAOMI PAD 5 (nabu)  -  installation guide and release notes
+==============================================================================
+
+Ubuntu Touch 24.04-2.x (Halium 13) for the Xiaomi Pad 5 ("nabu", Snapdragon 860).
+Status: EXPERIMENTAL. Usable every day, but some hardware does not work yet.
+Install it only if you know how to reflash your tablet with fastboot.
+Note: this port was created by its author in cooperation with an AI assistant.
+
+
+------------------------------------------------------------------------------
+ 1. FEATURES (WORKING)
+------------------------------------------------------------------------------
+
+ [OK] Boot, Lomiri desktop, hardware-accelerated graphics (Adreno 640)
+ [OK] Touchscreen, automatic screen rotation
+ [OK] On-screen keyboard
+      (keyboard-cover sensor fixed: the tablet no longer thinks a hardware
+       keyboard is attached)
+ [OK] Wi-Fi
+ [OK] Audio from the speakers
+ [OK] Battery level and charging
+ [OK] Xiaomi Pen 2:
+        - writing with pressure
+        - palm rejection (the hand on the screen is ignored while the pen is near)
+        - stroke prediction for lower latency (settings: /etc/nabu-pen.conf)
+        - magnetic charging, with notifications (attached / detached / battery %)
+ [OK] Android apps with Waydroid (GPU accelerated)
+ [OK] OpenStore and core apps preinstalled on the first boot
+      (Calculator, Calendar, Clock, File Manager, Gallery, Music, Terminal, Weather)
+ [OK] Snap packages (squashfs enabled in the kernel), including GPU acceleration
+      for snaps that support it (see section 6)
+ [OK] AppArmor confinement of apps (profiles are enforced)
+
+
+------------------------------------------------------------------------------
+ 2. NOT WORKING
+------------------------------------------------------------------------------
+
+ [NO] Cameras (front and rear)
+ [NO] Flashlight / torch
+
+
+------------------------------------------------------------------------------
+ 3. NOT TESTED YET
+------------------------------------------------------------------------------
+
+ [??] Bluetooth (the toggle is there)
+ [??] Suspend / deep sleep and battery life
+ [??] Microphone
+ [??] Xiaomi keyboard cover keys
+ [??] 120 Hz display mode
+ [??] Hardware video decoding
+ [??] Sensors other than the accelerometer
+
+
+------------------------------------------------------------------------------
+ 4. KNOWN ISSUES
+------------------------------------------------------------------------------
+
+ - Desktop Linux apps that use X11 (Libertine container, uFirefox...) are drawn
+   without GPU, and in LANDSCAPE they do not receive touch on the right part
+   of the screen (the X11 screen follows the portrait-native panel).
+   Use them in portrait, or prefer native, Wayland or Android apps.
+ - Waydroid: an Android app opened from the app drawer may stay hidden behind
+   other windows if Waydroid is already open in the background.
+   Workaround: open "Waydroid" first, then the app.
+ - Snaps that need device access (GPU, joystick...) must be installed with
+   --devmode: the 4.14 kernel lacks the BPF device-cgroup support that snap
+   confinement uses (it arrived in Linux 4.15).
+ - The clock can be wrong until the first network connection.
+ - "apparmor.service" is reported as failed at boot. Harmless: app
+   confinement works.
+ - Phone, Messages and External Storage apps are hidden on purpose
+   (no modem, no SD card slot).
+
+
+------------------------------------------------------------------------------
+ 5. INSTALLATION
+------------------------------------------------------------------------------
+
+ WARNING: installing ERASES ALL DATA on the tablet.
+ The installers NEVER lock the bootloader. Never use Xiaomi's
+ "flash_all_lock" script on a modified tablet.
+
+ What you need
+ -------------
+  1. Unlocked bootloader (Xiaomi's official Mi Unlock tool).
+  2. The tablet on a STOCK Xiaomi system: HyperOS or MIUI 13/14.
+     Tested base: HyperOS OS1.0.6.0.TKXEUXM (EEA Global, Android 13); other
+     stock versions should work but are not verified yet.
+     Custom ROMs (LineageOS...) and tablets repartitioned for dual boot are
+     NOT supported: flash a stock HyperOS fastboot ROM first with Xiaomi's
+     "flash_all" script (NOT "flash_all_lock").
+     "installer-any-rom.html" explains every starting point in detail.
+  3. A computer (Windows 10/11, macOS or Linux), a USB cable, and about
+     6 GB of free disk space.
+  Nothing else to download: the hardware drivers taken from ArrowOS 13.1
+  (vendor, odm, vbmeta) are included.
+
+ Step 1 - Download and unpack
+ ----------------------------
+  Download  ubuntu-touch-nabu-<version>-installer.zip  and unpack it.
+
+ Step 2 - Put the tablet in FASTBOOT mode
+ ----------------------------------------
+  Turn the tablet off. Hold VOLUME DOWN + POWER until the FASTBOOT screen
+  appears, then connect the USB cable.
+
+ Step 3 - Run ONE of the installers
+ ----------------------------------
+  A) In the browser (easiest): open  installer.html  with Google Chrome or
+     Microsoft Edge and follow the four steps on the page.
+  B) Windows:  double-click  install-windows.bat
+  C) macOS:    right-click  install-macos.command  > Open
+  D) Linux:    run  ./install-linux.sh  in a terminal
+               (if the tablet is not found, run it with sudo)
+
+  B, C and D download Google's "fastboot" tool automatically if it is missing.
+  Every installer checks that the device is a Xiaomi Pad 5 with an unlocked
+  bootloader and that the files are intact, then asks for confirmation.
+  It takes 10-15 minutes. The tablet restarts by itself; the first start takes
+  1-2 minutes (Mi logo, then the Ubuntu Touch welcome screen).
+
+  Windows: if the tablet is never found, Windows is missing the fastboot USB
+  driver. Install the "Android Bootloader Interface" driver (Google USB
+  driver, or WinUSB with Zadig) and try again.
+
+  Reinstalling on a tablet that already runs this port: the tablet cannot
+  enter "fastbootd" any more, so skip the hardware drivers: tick "Reinstall"
+  in installer.html, or run  ./install.sh --reinstall  (Windows:
+  install-windows.bat reinstall  from a Command Prompt).
+
+  Advanced (Linux/macOS):  ./install.sh --dry-run   shows every command
+  without writing anything;  ./install.sh --boot-only  updates only the
+  kernel and keeps your data.
+
+ Alternative - recovery zip (TWRP / OrangeFox)
+ ---------------------------------------------
+  ubuntu-touch-nabu-<version>-recovery.zip  is a complete installer too
+  (drivers, kernel and system) and KEEPS existing Ubuntu Touch data, so it is
+  also the way to update.
+  There is no official TWRP for nabu: use an unofficial build you trust.
+
+  1. Boot the recovery:  fastboot boot recovery.img
+  2. FIRST INSTALL ONLY: Wipe > Format Data > type "yes"  (choose ext4)
+  3. Install > select the recovery zip
+  4. Reboot > System
+
+ Going back to Android
+ ---------------------
+  Flash the HyperOS fastboot ROM with Xiaomi's "flash_all" script
+  (NOT "flash_all_lock").
+
+
+------------------------------------------------------------------------------
+ 6. TIPS
+------------------------------------------------------------------------------
+
+ GPU for snap apps (example: SuperTuxKart)
+ -----------------------------------------
+  Snaps can use the tablet GPU through the Android drivers with the
+  "hybris-2404" package from UBports. It only works for snaps that have a
+  "gpu-2404" connection, and only for OpenGL ES.
+
+     sudo snap install hybris-2404
+     sudo snap install supertuxkart --devmode
+     sudo snap connect supertuxkart:gpu-2404 hybris-2404:gpu-2404
+
+  Check whether a snap has the connection:  snap connections <name>
+
+ Pen settings
+ ------------
+  /etc/nabu-pen.conf, then:  sudo systemctl restart nabu-pen-bridge
+     PREDICT_MS      stroke prediction in milliseconds (0 = off)
+     PALM_REJECTION  1 = ignore fingers while the pen is near the screen
+
+
+------------------------------------------------------------------------------
+ 7. SOURCE CODE AND CREDITS
+------------------------------------------------------------------------------
+
+ Kernel: Droidian nabu kernel (MarshJiang/linux-android-xiaomi-nabu,
+ ArrowOS 13.1 base) plus the patches in "kernel-patches":
+   - Halium/Ubuntu Touch kernel configuration (includes squashfs for snaps)
+   - binder: don't fail transactions when AppArmor can't provide a secctx
+   - waitid(P_PIDFD) backport (needed by GLib / lightdm)
+   - clone(CLONE_PIDFD) fix (needed by Qt; otherwise the session gets killed)
+   - keyboard-cover hall sensor polarity (on-screen keyboard)
+ Device adaptation and installer: <repository link>
+
+ Thanks to UBports and the Ubuntu Touch community, Halium, Droidian,
+ MarshJiang, ArrowOS, the linux-on-nabu community and everyone who
+ documented this tablet.

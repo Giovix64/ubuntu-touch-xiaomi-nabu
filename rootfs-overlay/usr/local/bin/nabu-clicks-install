@@ -1,0 +1,13 @@
+#!/bin/sh
+# Primo avvio: installa i click preinstallati della build (OpenStore + app di base).
+# Il rootfs da fake OTA non ha i click preinstallati di UT. Si fa una sola volta
+# (marcatore su /opt/click.ubuntu.com, che sta su userdata): se poi l'utente
+# disinstalla un'app, non viene rimessa.
+MARK=/opt/click.ubuntu.com/.nabu-preinstalled
+[ -e "$MARK" ] && exit 0
+for c in /usr/share/nabu/clicks/*.click; do
+    [ -e "$c" ] || continue
+    echo "installo $(basename "$c")"
+    click install --all-users --allow-unauthenticated "$c" || echo "ERRORE: $c"
+done
+touch "$MARK"

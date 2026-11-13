@@ -1,0 +1,366 @@
+#!/usr/bin/python3
+"""Ponte Xiaomi Pen 2 per Ubuntu Touch su nabu (Mir 1.8). Solo libreria standard.
+
+1. Penna -> touch: Mir 1.8 (input-evdev.so.7) ignora gli eventi libinput "tablet
+   tool". La penna NVTCapacitivePen viene letta in esclusiva (grab) e ripubblicata
+   come touchscreen virtuale "nabu-pen-touch" a un contatto, con pressione.
+2. Previsione del tratto: durante un tratto la posizione inviata e' spostata in
+   avanti di PREDICT_MS lungo la velocita' stimata (max PREDICT_MAX_PX), per
+   ridurre il ritardo percepito. Tap e pressioni lunghe restano esatti (la
+   previsione parte solo dopo TAP_SLOP_PX di movimento) e il punto finale e'
+   sempre quello reale.
+3. Palm rejection: anche il touchscreen NVTCapacitiveTouchScreen passa dal ponte
+   ("nabu-touch"). Con la penna vicina allo schermo (hover o contatto) e per
+   PALM_GRACE_MS dopo, i tocchi delle dita vengono chiusi e ignorati finche'
+   tutte le dita non si sollevano.
+
+Configurazione: /etc/nabu-pen.conf (CHIAVE=valore), letta all'avvio.
+Se il processo muore il kernel rilascia i grab e il touch torna diretto a Mir.
+"""
+import os, sys, time, select, struct, fcntl, glob, math
+
+# ---------------- mini evdev/uinput (ioctl del kernel) ----------------
+EV_SYN, EV_KEY, EV_ABS, EV_MSC = 0x00, 0x01, 0x03, 0x04
+SYN_REPORT = 0
+BTN_TOOL_PEN, BTN_TOUCH = 0x140, 0x14a
+ABS_X, ABS_Y, ABS_PRESSURE = 0x00, 0x01, 0x18
+ABS_MT_SLOT, ABS_MT_TOUCH_MAJOR = 0x2f, 0x30
+ABS_MT_POSITION_X, ABS_MT_POSITION_Y = 0x35, 0x36
+ABS_MT_TRACKING_ID, ABS_MT_PRESSURE, ABS_MT_TOOL_Y = 0x39, 0x3a, 0x3d
+INPUT_PROP_DIRECT = 0x01
+KEY_MAX, ABS_MAX, INPUT_PROP_MAX = 0x2ff, 0x3f, 0x1f
+BUS_VIRTUAL = 0x06
+
+EVENT = struct.Struct("llHHi")           # struct input_event (64 bit)
+ABSINFO = struct.Struct("6i")            # value min max fuzz flat resolution
+
+def _IOC(d, t, nr, size):
+    return (d << 30) | (size << 16) | (ord(t) << 8) | nr
+def _IO(t, nr): return _IOC(0, t, nr, 0)
+def _IOW(t, nr, size): return _IOC(1, t, nr, size)
+def _IOR(t, nr, size): return _IOC(2, t, nr, size)
+
+EVIOCGID = _IOR("E", 0x02, 8)
+EVIOCGRAB = _IOW("E", 0x90, 4)
+def EVIOCGBIT(ev, n): return _IOC(2, "E", 0x20 + ev, n)
+def EVIOCGABS(a): return _IOR("E", 0x40 + a, ABSINFO.size)
+def EVIOCGPROP(n): return _IOC(2, "E", 0x09, n)
+UI_DEV_CREATE = _IO("U", 1)
+UI_DEV_SETUP = _IOW("U", 3, 92)           # struct uinput_setup
+UI_ABS_SETUP = _IOW("U", 4, 28)           # struct uinput_abs_setup
+UI_SET_EVBIT, UI_SET_KEYBIT = _IOW("U", 100, 4), _IOW("U", 101, 4)
+UI_SET_ABSBIT, UI_SET_PROPBIT = _IOW("U", 103, 4), _IOW("U", 110, 4)
+
+def _bits(fd, req, nbits):
+    buf = bytearray((nbits + 7) // 8)
+    fcntl.ioctl(fd, req, buf, True)
+    return [i for i in range(nbits) if buf[i // 8] >> (i % 8) & 1]
+
+class InDev:
+    """Dispositivo /dev/input/eventN in lettura."""
+    def __init__(self, path, name):
+        self.path, self.name = path, name
+        self.fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+    def absinfo(self, code):
+        buf = bytearray(ABSINFO.size)
+        fcntl.ioctl(self.fd, EVIOCGABS(code), buf, True)
+        return ABSINFO.unpack(buf)
+    def caps(self):
+        ev = _bits(self.fd, EVIOCGBIT(0, 4), 32)
+        keys = _bits(self.fd, EVIOCGBIT(EV_KEY, (KEY_MAX + 8) // 8), KEY_MAX + 1) if EV_KEY in ev else []
+        absb = _bits(self.fd, EVIOCGBIT(EV_ABS, 8), ABS_MAX + 1) if EV_ABS in ev else []
+        props = _bits(self.fd, EVIOCGPROP(4), INPUT_PROP_MAX + 1)
+        return ev, keys, {a: self.absinfo(a) for a in absb}, props
+    def grab(self):
+        fcntl.ioctl(self.fd, EVIOCGRAB, 1)
+    def read(self):
+        try:
+            data = os.read(self.fd, EVENT.size * 128)
+        except BlockingIOError:
+            return []
+        return [EVENT.unpack_from(data, o) for o in range(0, len(data) - EVENT.size + 1, EVENT.size)]
+
+def find(name):
+    for p in sorted(glob.glob("/sys/class/input/event*/device/name")):
+        try:
+            if open(p).read().strip() == name:
+                return InDev("/dev/input/" + p.split("/")[4], name)
+        except OSError:
+            pass
+    return None
+
+class UDev:
+    """Dispositivo virtuale uinput."""
+    def __init__(self, name, keys, absinfo, props, evs=(EV_SYN, EV_KEY, EV_ABS)):
+        self.fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
+        for ev in evs:
+            fcntl.ioctl(self.fd, UI_SET_EVBIT, ev)
+        for k in keys:
+            fcntl.ioctl(self.fd, UI_SET_KEYBIT, k)
+        for p in props:
+            fcntl.ioctl(self.fd, UI_SET_PROPBIT, p)
+        for a, info in absinfo.items():
+            fcntl.ioctl(self.fd, UI_SET_ABSBIT, a)
+            fcntl.ioctl(self.fd, UI_ABS_SETUP, struct.pack("HH6i", a, 0, *info))
+        setup = struct.pack("4H80sI", BUS_VIRTUAL, 0, 0, 1, name.encode()[:79], 0)
+        fcntl.ioctl(self.fd, UI_DEV_SETUP, setup)
+        fcntl.ioctl(self.fd, UI_DEV_CREATE)
+        self.buf = []
+    def write(self, t, c, v):
+        self.buf.append(EVENT.pack(0, 0, t, c, v))
+    def syn(self):
+        self.buf.append(EVENT.pack(0, 0, EV_SYN, SYN_REPORT, 0))
+        os.write(self.fd, b"".join(self.buf))
+        self.buf = []
+
+def ai(lo, hi):
+    return (0, lo, hi, 0, 0, 0)
+
+# ---------------- configurazione ----------------
+CONF = {"PREDICT_MS": 8.0, "PREDICT_MAX_PX": 12.0, "PREDICT_WINDOW_MS": 17.0, "TAP_SLOP_PX": 12.0,
+        "SMOOTH_MIN_CUTOFF": 0.0, "SMOOTH_BETA": 0.05,
+        "PALM_REJECTION": 1.0, "PALM_GRACE_MS": 400.0, "PEN_TIMEOUT_MS": 300.0}
+try:
+    for line in open("/etc/nabu-pen.conf"):
+        line = line.split("#", 1)[0].strip()
+        if "=" in line:
+            k, v = (s.strip() for s in line.split("=", 1))
+            if k in CONF:
+                CONF[k] = float(v)
+except OSError:
+    pass
+
+pen = touch = None
+for _ in range(60):
+    pen = pen or find("NVTCapacitivePen")
+    touch = touch or find("NVTCapacitiveTouchScreen")
+    if pen and touch:
+        break
+    time.sleep(1)
+if not pen:
+    sys.exit("NVTCapacitivePen non trovato")
+
+# ---------------- penna -> touchscreen virtuale ----------------
+PX, PY, PP = pen.absinfo(ABS_X)[2], pen.absinfo(ABS_Y)[2], pen.absinfo(ABS_PRESSURE)[2]
+UPP = PX / 1600.0 if PX > 1600 else 1.0          # unita' penna per pixel
+pen_ui = UDev("nabu-pen-touch", [BTN_TOUCH],
+              {ABS_X: ai(0, PX), ABS_Y: ai(0, PY), ABS_MT_SLOT: ai(0, 0),
+               ABS_MT_TOUCH_MAJOR: ai(0, 255), ABS_MT_POSITION_X: ai(0, PX),
+               ABS_MT_POSITION_Y: ai(0, PY), ABS_MT_TRACKING_ID: ai(0, 65535),
+               ABS_MT_PRESSURE: ai(0, PP)},
+              [INPUT_PROP_DIRECT])
+pen.grab()
+
+PRED_S = CONF["PREDICT_MS"] / 1000.0
+WIN_S = CONF["PREDICT_WINDOW_MS"] / 1000.0
+PRED_MAX = CONF["PREDICT_MAX_PX"] * UPP
+SLOP2 = (CONF["TAP_SLOP_PX"] * UPP) ** 2
+
+class P:
+    x = y = p = 0
+    tool = 0                # BTN_TOOL_PEN: penna in prossimita'
+    last_ev = 0.0           # ultimo evento penna (monotonic)
+    down = False
+    tid = 0
+    sx = sy = 0             # inizio tratto
+    moving = False          # superato lo slop: previsione attiva
+    hist = []               # campioni recenti (t, x, y) per la stima della velocita'
+    pvx = pvy = 0.0         # velocita' stimata al campione precedente
+    ox = oy = 0.0           # anticipo applicato (smussato)
+    fx = fy = 0.0           # posizione filtrata (filtro One Euro)
+    fdx = fdy = 0.0         # velocita' filtrata del filtro
+    ft = 0.0                # tempo dell'ultimo campione filtrato
+    dirty = False
+
+def pen_emit(x, y, p):
+    x = min(max(int(x), 0), PX); y = min(max(int(y), 0), PY)
+    pen_ui.write(EV_ABS, ABS_MT_POSITION_X, x)
+    pen_ui.write(EV_ABS, ABS_MT_POSITION_Y, y)
+    pen_ui.write(EV_ABS, ABS_MT_PRESSURE, max(p, 1))
+    pen_ui.write(EV_ABS, ABS_X, x)
+    pen_ui.write(EV_ABS, ABS_Y, y)
+    pen_ui.syn()
+
+def pen_lift():
+    if P.moving:                       # punto finale senza previsione
+        pen_emit(P.fx, P.fy, 1)
+    pen_ui.write(EV_ABS, ABS_MT_TRACKING_ID, -1)
+    pen_ui.write(EV_KEY, BTN_TOUCH, 0)
+    pen_ui.syn()
+    P.down = False
+
+def _alpha(cutoff, dt):
+    tau = 1.0 / (2 * math.pi * cutoff)
+    return 1.0 / (1.0 + tau / dt)
+
+def smooth(t):
+    """Filtro One Euro: smussa molto quando la penna va piano (tremolio), poco quando
+    va veloce (niente ritardo). Taglio in Hz, beta per px/s."""
+    if CONF["SMOOTH_MIN_CUTOFF"] <= 0:
+        P.fx, P.fy = P.x, P.y
+        return
+    dt = max(t - P.ft, 1e-3)
+    P.ft = t
+    a = _alpha(1.0, dt)
+    P.fdx += a * ((P.x - P.fx) / dt - P.fdx)
+    P.fdy += a * ((P.y - P.fy) / dt - P.fdy)
+    speed = (P.fdx * P.fdx + P.fdy * P.fdy) ** 0.5 / UPP
+    a = _alpha(CONF["SMOOTH_MIN_CUTOFF"] + CONF["SMOOTH_BETA"] * speed, dt)
+    P.fx += a * (P.x - P.fx)
+    P.fy += a * (P.y - P.fy)
+
+def velocity():
+    """Velocita' (unita'/s) per regressione lineare sui campioni della finestra."""
+    h = P.hist
+    if len(h) < 3:
+        return 0.0, 0.0
+    n = len(h)
+    mt = sum(c[0] for c in h) / n
+    mx = sum(c[1] for c in h) / n
+    my = sum(c[2] for c in h) / n
+    stt = sum((c[0] - mt) ** 2 for c in h)
+    if stt <= 0:
+        return 0.0, 0.0
+    return (sum((c[0] - mt) * (c[1] - mx) for c in h) / stt,
+            sum((c[0] - mt) * (c[2] - my) for c in h) / stt)
+
+def pen_frame(t):
+    touching = P.p > 0
+    if touching and not P.down:
+        P.tid = (P.tid + 1) & 0xffff
+        P.down, P.moving = True, False
+        P.sx, P.sy = P.x, P.y
+        P.fx, P.fy, P.fdx, P.fdy, P.ft = P.x, P.y, 0.0, 0.0, t
+        P.hist = [(t, P.x, P.y)]
+        P.pvx = P.pvy = P.ox = P.oy = 0.0
+        pen_ui.write(EV_ABS, ABS_MT_SLOT, 0)
+        pen_ui.write(EV_ABS, ABS_MT_TRACKING_ID, P.tid)
+        pen_ui.write(EV_ABS, ABS_MT_TOUCH_MAJOR, 4)
+        pen_ui.write(EV_KEY, BTN_TOUCH, 1)
+        pen_emit(P.x, P.y, P.p)
+    elif touching:
+        smooth(t)
+        P.hist.append((t, P.fx, P.fy))
+        while P.hist and t - P.hist[0][0] > WIN_S:
+            P.hist.pop(0)
+        if not P.moving and (P.x - P.sx) ** 2 + (P.y - P.sy) ** 2 > SLOP2:
+            P.moving = True
+        tx = ty = 0.0
+        if P.moving and PRED_S > 0:
+            vx, vy = velocity()
+            # nelle curve (direzione che cambia) l'anticipo si riduce: niente sbandate
+            k = 1.0
+            n1 = (vx * vx + vy * vy) ** 0.5
+            n0 = (P.pvx * P.pvx + P.pvy * P.pvy) ** 0.5
+            if n1 > 0 and n0 > 0:
+                cos = (vx * P.pvx + vy * P.pvy) / (n1 * n0)
+                k = max(0.0, cos) ** 4
+            P.pvx, P.pvy = vx, vy
+            tx, ty = vx * PRED_S * k, vy * PRED_S * k
+            n = (tx * tx + ty * ty) ** 0.5
+            if n > PRED_MAX:
+                tx, ty = tx * PRED_MAX / n, ty * PRED_MAX / n
+        # anticipo smussato: niente salti tra un campione e l'altro
+        P.ox += 0.6 * (tx - P.ox)
+        P.oy += 0.6 * (ty - P.oy)
+        pen_emit(P.fx + P.ox, P.fy + P.oy, P.p)
+    elif P.down:
+        pen_lift()
+
+def on_pen(sec, usec, typ, code, val, now):
+    P.last_ev = now
+    if typ == EV_ABS:
+        if code == ABS_X: P.x = val; P.dirty = True
+        elif code == ABS_Y: P.y = val; P.dirty = True
+        elif code == ABS_PRESSURE: P.p = val; P.dirty = True
+    elif typ == EV_KEY and code == BTN_TOOL_PEN:
+        P.tool = val
+    elif typ == EV_SYN and code == SYN_REPORT and P.dirty:
+        P.dirty = False
+        pen_frame(sec + usec / 1e6)
+
+def pen_near(now):
+    return (P.tool or P.p > 0) and (now - P.last_ev) * 1000 < CONF["PEN_TIMEOUT_MS"]
+
+# ---------------- touchscreen con palm rejection ----------------
+PALM = CONF["PALM_REJECTION"] > 0 and touch is not None
+
+class T:
+    rslot = 0            # slot corrente sul dispositivo reale
+    vslot = 0            # slot corrente sul virtuale
+    real_ids = []        # contatti reali (tracking id per slot)
+    virt_ids = []        # contatti che Mir vede aperti
+    blocking = False
+    grace_until = 0.0
+    pending = False      # eventi scritti sul virtuale senza SYN
+
+if PALM:
+    evs, keys, absinfo, props = touch.caps()
+    t_ui = UDev("nabu-touch", keys, absinfo, props,
+                evs=[e for e in evs if e in (EV_SYN, EV_KEY, EV_ABS, EV_MSC)])
+    nslots = absinfo[ABS_MT_SLOT][2] + 1
+    T.real_ids = [-1] * nslots
+    T.virt_ids = [-1] * nslots
+    touch.grab()
+
+def t_cancel_all():
+    """Chiude per Mir tutti i contatti delle dita aperti."""
+    any_ = False
+    for s, i in enumerate(T.virt_ids):
+        if i != -1:
+            t_ui.write(EV_ABS, ABS_MT_SLOT, s)
+            t_ui.write(EV_ABS, ABS_MT_TRACKING_ID, -1)
+            T.virt_ids[s] = -1; T.vslot = s; any_ = True
+    if any_:
+        t_ui.write(EV_KEY, BTN_TOUCH, 0)
+        t_ui.syn(); T.pending = False
+
+def t_update_block(now):
+    if pen_near(now):
+        T.grace_until = now + CONF["PALM_GRACE_MS"] / 1000.0
+        if not T.blocking:
+            T.blocking = True
+            t_cancel_all()
+    elif T.blocking and now >= T.grace_until and all(i == -1 for i in T.real_ids):
+        T.blocking = False          # si riprende solo a dita tutte sollevate
+
+def on_touch(sec, usec, typ, code, val, now):
+    if typ == EV_SYN:
+        if code == SYN_REPORT:
+            if T.pending:
+                t_ui.syn(); T.pending = False
+            t_update_block(now)
+        return
+    if typ == EV_ABS and code == ABS_MT_SLOT:
+        T.rslot = min(val, len(T.real_ids) - 1)
+        return                      # lo slot viene riemesso solo quando serve
+    if typ == EV_ABS and code == ABS_MT_TRACKING_ID:
+        T.real_ids[T.rslot] = val
+    if T.blocking and not (typ == EV_KEY and code != BTN_TOUCH):
+        return                      # durante il blocco passano solo i tasti gesture
+    if typ == EV_ABS and ABS_MT_TOUCH_MAJOR <= code <= ABS_MT_TOOL_Y:
+        if T.vslot != T.rslot:
+            t_ui.write(EV_ABS, ABS_MT_SLOT, T.rslot); T.vslot = T.rslot
+        if code == ABS_MT_TRACKING_ID:
+            T.virt_ids[T.vslot] = val
+    t_ui.write(typ, code, val)
+    T.pending = True
+
+print(f"nabu-pen-bridge: penna {PX}x{PY} p{PP}, previsione {CONF['PREDICT_MS']} ms "
+      f"(max {CONF['PREDICT_MAX_PX']} px), palm rejection {'si' if PALM else 'no'}", flush=True)
+
+devs = {pen.fd: (pen, on_pen)}
+if PALM:
+    devs[touch.fd] = (touch, on_touch)
+while True:
+    r, _, _ = select.select(list(devs), [], [], 0.2)
+    now = time.monotonic()
+    for fd in r:
+        dev, handler = devs[fd]
+        for ev in dev.read():
+            handler(*ev, now)
+    # penna sparita senza evento di uscita: chiudi il tratto
+    if P.down and (now - P.last_ev) * 1000 > CONF["PEN_TIMEOUT_MS"]:
+        P.p = 0; P.tool = 0; pen_lift()
+    if PALM:
+        t_update_block(now)

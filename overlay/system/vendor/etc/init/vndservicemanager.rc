@@ -1,0 +1,12 @@
+# Android presuppone SELinux attivo; Ubuntu Touch usa AppArmor. Senza questo vndservicemanager
+# muore con "Check failed: selinux_status_open(true) >= 0". Halium fornisce libselinux_stubs.so
+# (libselinux finta). Stessa correzione del port UT Pixel 5 (redfin), vedi 20261112_Primo_avvio_UT.md.
+# Sotto: vndservicemanager.rc del vendor HyperOS di nabu + la riga setenv.
+
+service vndservicemanager /vendor/bin/vndservicemanager /dev/vndbinder
+    setenv LD_PRELOAD libselinux_stubs.so
+    class core
+    user system
+    group system readproc
+    writepid /dev/cpuset/system-background/tasks
+    shutdown critical

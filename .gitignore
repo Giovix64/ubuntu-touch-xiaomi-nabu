@@ -1,0 +1,22 @@
+# output della build
+build/
+workdir/
+out/
+ota/
+images/
+*.log
+
+# file locali dello sviluppo
+backup/
+logs/
+
+# rilascio: file generati da release/make-release.sh
+release/build/
+release/dist/
+
+# click preinstallati: si scaricano con tools/fetch-clicks.py prima della build
+rootfs-overlay/usr/share/nabu/clicks/*.click
+
+# personalizzazioni di Giovanni (non fanno parte del port pubblico)
+personal/
+rootfs-overlay/usr/share/nabu/*.apex

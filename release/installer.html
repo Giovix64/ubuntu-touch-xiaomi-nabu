@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ubuntu Touch Installer · Xiaomi Pad 5</title>
+<style>
+  :root {
+    --bg: #f6f4f1; --card: #ffffff; --ink: #1d1b19; --muted: #6b655e; --line: #e2ddd6;
+    --accent: #c7430d; --accent-ink: #ffffff; --ok: #1f7a3d; --warn: #9a5b00; --bad: #b3261e;
+    --soft: #f1ede8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #171513; --card: #211e1b; --ink: #f1ece6; --muted: #a59d93; --line: #38332e;
+      --accent: #f0703a; --accent-ink: #1a0d06; --ok: #6fcf8b; --warn: #f0b354; --bad: #ff8a80;
+      --soft: #2a2622;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #171513; --card: #211e1b; --ink: #f1ece6; --muted: #a59d93; --line: #38332e;
+    --accent: #f0703a; --accent-ink: #1a0d06; --ok: #6fcf8b; --warn: #f0b354; --bad: #ff8a80;
+    --soft: #2a2622;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Ubuntu, Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+  header h1 { font-size: 1.7rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+          padding: 20px; margin-top: 16px; }
+  .card h2 { font-size: 1.1rem; margin: 0 0 8px; display: flex; align-items: center; gap: 10px; }
+  .num { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--soft);
+         color: var(--muted); font-size: .9rem; font-weight: 700; display: grid; place-items: center; }
+  .card.active { border-color: var(--accent); }
+  .card.active .num { background: var(--accent); color: var(--accent-ink); }
+  .card.done .num { background: var(--ok); color: var(--card); }
+  .card.locked { opacity: .5; }
+  .card.locked button, .card.locked input { pointer-events: none; }
+  p { margin: 8px 0; }
+  ol { margin: 8px 0; padding-left: 22px; }
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 12px 20px;
+           background: var(--accent); color: var(--accent-ink); cursor: pointer; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.secondary { background: var(--soft); color: var(--ink); }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+  .status { font-size: .95rem; color: var(--muted); overflow-wrap: anywhere; }
+  .status.ok { color: var(--ok); } .status.bad { color: var(--bad); } .status.warn { color: var(--warn); }
+  .warnbox { border: 1px solid var(--bad); border-radius: 10px; padding: 12px 14px; margin: 12px 0; }
+  .warnbox strong { color: var(--bad); }
+  label.check { display: flex; gap: 10px; align-items: flex-start; margin-top: 8px; cursor: pointer; }
+  label.check input { margin-top: 5px; width: 18px; height: 18px; flex: none; }
+  .bar { height: 12px; border-radius: 6px; background: var(--soft); overflow: hidden; margin: 12px 0 6px; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  ul.steps { list-style: none; padding: 0; margin: 12px 0 0; }
+  ul.steps li { padding: 5px 0 5px 28px; position: relative; color: var(--muted); }
+  ul.steps li::before { content: "○"; position: absolute; left: 4px; }
+  ul.steps li.run { color: var(--ink); font-weight: 600; } ul.steps li.run::before { content: "▸"; color: var(--accent); }
+  ul.steps li.ok { color: var(--ok); } ul.steps li.ok::before { content: "✔"; }
+  ul.steps li.bad { color: var(--bad); } ul.steps li.bad::before { content: "✘"; }
+  details { margin-top: 12px; } summary { cursor: pointer; color: var(--muted); }
+  pre { background: var(--soft); border-radius: 8px; padding: 10px; font-size: .8rem; max-height: 220px;
+        overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 0; }
+  .big { font-size: 1.25rem; font-weight: 700; }
+  code { background: var(--soft); padding: 1px 6px; border-radius: 5px; font-size: .9em; }
+  input[type=file] { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Ubuntu Touch Installer</h1>
+    <p>for the Xiaomi Pad 5 (nabu) · runs entirely in your browser, nothing is uploaded</p>
+  </header>
+
+  <section class="card" id="unsupported" hidden>
+    <h2>This browser cannot talk to USB devices</h2>
+    <p>Please open this page with <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> on a
+       computer (Windows, macOS, Linux or ChromeOS). Firefox and Safari are not supported.</p>
+    <p>Or use the classic installer in this folder: <code>install-windows.bat</code>,
+       <code>install-macos.command</code>, <code>install-linux.sh</code>.</p>
+  </section>
+
+  <section class="card active" id="c1">
+    <h2><span class="num">1</span>Before you start</h2>
+    <ol>
+      <li>The tablet's bootloader must be <strong>unlocked</strong> (Xiaomi's Mi Unlock tool).</li>
+      <li>The tablet must run a <strong>stock</strong> HyperOS or MIUI 13/14 (tested base: HyperOS OS1.0.6.0.TKXEUXM).
+          Coming from a custom ROM or unsure? Open <code>installer-any-rom.html</code> instead: it explains every case.</li>
+      <li>Charge the battery above 50% and use a good USB cable.</li>
+    </ol>
+    <div class="warnbox"><strong>Everything on the tablet will be erased</strong> — photos, apps, accounts.
+      Copy what you want to keep to another device first.</div>
+    <p class="status">Good to know: this project was created by its author in cooperation with an AI assistant.
+      It is experimental — use it at your own risk.</p>
+    <label class="check"><input type="checkbox" id="agree">
+      <span>I understand that all data on the tablet will be erased.</span></label>
+  </section>
+
+  <section class="card locked" id="c2">
+    <h2><span class="num">2</span>Choose the installer folder</h2>
+    <p>Select the folder that contains this page (the one with the <code>images</code> folder inside).
+       Chrome will ask to "upload" the files: nothing leaves your computer.</p>
+    <div class="row">
+      <button id="pick">Choose folder…</button>
+      <input type="file" id="dir" webkitdirectory multiple>
+      <span class="status" id="filesStatus"></span>
+    </div>
+  </section>
+
+  <section class="card locked" id="c3">
+    <h2><span class="num">3</span>Connect the tablet</h2>
+    <ol>
+      <li>Turn the tablet <strong>off</strong>.</li>
+      <li>Hold <strong>Volume Down + Power</strong> until the FASTBOOT screen appears.</li>
+      <li>Connect it to this computer, then press the button and pick the tablet in the list
+          (it may be called "Android" or "Xiaomi").</li>
+    </ol>
+    <div class="row">
+      <button id="connect">Connect tablet</button>
+      <span class="status" id="devStatus"></span>
+    </div>
+    <details><summary>The tablet is not in the list (Windows)</summary>
+      <p>Windows needs a USB driver for fastboot. Install the "Android Bootloader Interface" (WinUSB) driver —
+         for example with Google's USB driver or Zadig — then reconnect the tablet and try again.</p></details>
+  </section>
+
+  <section class="card locked" id="c4">
+    <h2><span class="num">4</span>Install</h2>
+    <p>Takes about 10–15 minutes. <strong>Do not unplug the tablet or close this page.</strong></p>
+    <label class="check"><input type="checkbox" id="skipVendor">
+      <span><strong>Reinstall:</strong> this tablet already runs this Ubuntu Touch port (skip the hardware drivers).
+      Leave it unticked if the tablet runs HyperOS/Android.</span></label>
+    <div class="row"><button id="install">Erase the tablet and install Ubuntu Touch</button></div>
+    <div id="progress" hidden>
+      <div class="bar"><div id="barFill"></div></div>
+      <div class="status" id="progText"></div>
+      <ul class="steps" id="steps"></ul>
+      <div class="row" id="reconnectRow" hidden>
+        <button id="reconnect">Continue</button>
+        <span class="status warn" id="reconnectText"></span>
+      </div>
+    </div>
+    <details><summary>Technical log</summary><pre id="log"></pre></details>
+  </section>
+
+  <section class="card" id="finished" hidden>
+    <p class="big">All done! 🎉</p>
+    <p>The tablet is restarting. The first start takes 1–2 minutes: you will see the Mi logo and then the
+       Ubuntu Touch welcome screen. You can unplug the cable.</p>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const logEl = $("log");
+function log(...a) { logEl.textContent += a.join(" ") + "\n"; logEl.scrollTop = logEl.scrollHeight; }
+function setStatus(el, text, cls) { el.textContent = text; el.className = "status" + (cls ? " " + cls : ""); }
+function activate(n) {
+  for (let i = 1; i <= 4; i++) {
+    const c = $("c" + i);
+    c.classList.toggle("done", i < n); c.classList.toggle("active", i === n); c.classList.toggle("locked", i > n);
+  }
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ------------------------------------------------------------------ files */
+let FILES = null;   // name -> File
+let MANIFEST = null;
+
+async function sha256(file) {
+  const d = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function loadFolder(fileList) {
+  const map = {};
+  for (const f of fileList) {
+    const p = f.webkitRelativePath.split("/");
+    const i = p.lastIndexOf("images");
+    if (i >= 0 && i === p.length - 2) map[p[p.length - 1]] = f;
+  }
+  if (!map["manifest.json"]) throw new Error("This is not the installer folder: images/manifest.json was not found.");
+  const m = JSON.parse(await map["manifest.json"].text());
+  const all = [...new Set(m.steps.flatMap(s => s.files || []))];
+  let done = 0;
+  for (const name of all) {
+    const f = map[name];
+    if (!f) throw new Error("Missing file: images/" + name);
+    if (f.size !== m.files[name].size) throw new Error("Wrong size: images/" + name + " (incomplete download?)");
+    setStatus($("filesStatus"), `Checking files… ${++done} of ${all.length}`);
+    if (await sha256(f) !== m.files[name].sha256) throw new Error("Damaged file: images/" + name + ". Download the installer again.");
+  }
+  FILES = map; MANIFEST = m;
+  log("manifest:", m.name, "-", all.length, "files verified");
+}
+
+/* ------------------------------------------------------------------ fastboot over WebUSB */
+const FB_FILTER = [{ classCode: 0xff, subclassCode: 0x42, protocolCode: 0x03 }];
+class Fastboot {
+  constructor(dev) { this.dev = dev; }
+  static async request() { return new Fastboot(await navigator.usb.requestDevice({ filters: FB_FILTER })); }
+  async open() {
+    const d = this.dev;
+    await d.open();
+    if (!d.configuration) await d.selectConfiguration(1);
+    let found = null;
+    for (const itf of d.configuration.interfaces) for (const alt of itf.alternates) {
+      if (alt.interfaceClass === 0xff && alt.interfaceSubclass === 0x42 && alt.interfaceProtocol === 0x03) found = { itf, alt };
+    }
+    if (!found) throw new Error("The selected device is not in fastboot mode.");
+    await d.claimInterface(found.itf.interfaceNumber);
+    this.epIn = found.alt.endpoints.find(e => e.direction === "in" && e.type === "bulk").endpointNumber;
+    const out = found.alt.endpoints.find(e => e.direction === "out" && e.type === "bulk");
+    this.epOut = out.endpointNumber; this.packet = out.packetSize;
+  }
+  async close() { try { await this.dev.close(); } catch (e) {} }
+  async read() {
+    const r = await this.dev.transferIn(this.epIn, 256);
+    return new TextDecoder().decode(r.data);
+  }
+  /* send a command and collect INFO lines until OKAY / FAIL / DATA */
+  async cmd(text, quiet) {
+    if (!quiet) log(">", text);
+    await this.dev.transferOut(this.epOut, new TextEncoder().encode(text));
+    let info = "";
+    for (;;) {
+      const r = await this.read(); const tag = r.slice(0, 4), body = r.slice(4);
+      if (tag === "INFO") { info += body + "\n"; if (!quiet) log("  ", body); continue; }
+      if (tag === "TEXT") continue;
+      if (tag === "OKAY") return { ok: true, body, info };
+      if (tag === "DATA") return { ok: true, data: parseInt(body, 16), info };
+      if (tag === "FAIL") throw new Error(`The tablet refused "${text}": ${body}`);
+      throw new Error("Unexpected answer from the tablet: " + r);
+    }
+  }
+  async getvar(name) { try { return (await this.cmd("getvar:" + name, true)).body.trim(); } catch (e) { return ""; } }
+  async flash(partition, file, onBytes) {
+    const size = file.size;
+    const r = await this.cmd("download:" + size.toString(16).padStart(8, "0"));
+    if (r.data !== size) throw new Error("The tablet did not accept the file size.");
+    const CH = 1024 * 1024;
+    for (let off = 0; off < size; off += CH) {
+      const buf = await file.slice(off, Math.min(off + CH, size)).arrayBuffer();
+      const res = await this.dev.transferOut(this.epOut, buf);
+      if (res.status !== "ok") throw new Error("USB transfer failed (" + res.status + ").");
+      onBytes(buf.byteLength);
+    }
+    const end = await this.read();
+    if (!end.startsWith("OKAY")) throw new Error("Download failed: " + end);
+    await this.cmd("flash:" + partition);
+  }
+}
+
+let fb = null, SLOT = "";
+
+async function checkDevice() {
+  const product = await fb.getvar("product");
+  if (product !== "nabu") throw new Error(`This is not a Xiaomi Pad 5 (found "${product || "unknown"}"). Nothing was changed.`);
+  if (await fb.getvar("is-userspace") === "yes") return "fastbootd";
+  if (await fb.getvar("unlocked") !== "yes") throw new Error("The bootloader is locked. Unlock it first with Xiaomi's Mi Unlock tool. Nothing was changed.");
+  SLOT = (await fb.getvar("current-slot")).replace("_", "");
+  if (SLOT !== "a" && SLOT !== "b") throw new Error("Could not read the active slot. Nothing was changed.");
+  const max = parseInt(await fb.getvar("max-download-size")) || 0;
+  log("slot", SLOT, "max-download-size", max);
+  return "bootloader";
+}
+
+/* wait for the tablet to come back in the wanted mode ("fastbootd" or "bootloader") */
+async function reconnect(want) {
+  await fb.close(); fb = null;
+  const label = want === "fastbootd" ? "fastbootd" : "the bootloader";
+  const tryOpen = async dev => {
+    const f = new Fastboot(dev);
+    try {
+      await f.open();
+      const us = await f.getvar("is-userspace") === "yes";
+      if ((want === "fastbootd") === us) return f;
+      await f.close();
+    } catch (e) { await f.close(); }
+    return null;
+  };
+  $("reconnectRow").hidden = true;
+  const start = Date.now();
+  let asked = null;
+  $("reconnect").onclick = async () => {
+    try { asked = (await navigator.usb.requestDevice({ filters: FB_FILTER })); } catch (e) {}
+  };
+  while (Date.now() - start < 240000) {
+    await sleep(1500);
+    const devs = await navigator.usb.getDevices();
+    if (asked) { devs.unshift(asked); asked = null; }
+    for (const d of devs) { const f = await tryOpen(d); if (f) { $("reconnectRow").hidden = true; fb = f; return; } }
+    if (Date.now() - start > 12000) {
+      $("reconnectRow").hidden = false;
+      setStatus($("reconnectText"), `Waiting for the tablet in ${label}. When its screen has changed, press Continue and select it again.`, "warn");
+    }
+  }
+  if (want === "fastbootd") throw new Error("The tablet did not enter fastbootd. If it started Ubuntu Touch instead, " +
+    "this port is already installed: put it back in FASTBOOT mode, reload this page and tick \"Reinstall\" in step 4. " +
+    "If it started something else, flash the stock HyperOS first (see GUIDE.txt). Nothing was changed.");
+  throw new Error(`The tablet did not come back in ${label}. Put it in FASTBOOT mode and start again.`);
+}
+
+/* ------------------------------------------------------------------ install */
+async function install() {
+  const steps = MANIFEST.steps.filter(s => !($("skipVendor").checked && s.mode === "fastbootd"));
+  const ul = $("steps"); ul.innerHTML = "";
+  const lis = steps.map(s => { const li = document.createElement("li"); li.textContent = s.title; ul.appendChild(li); return li; });
+  const total = steps.reduce((t, s) => t + (s.files || []).reduce((a, n) => a + FILES[n].size, 0), 0);
+  let sent = 0;
+  const onBytes = n => {
+    sent += n; const pct = Math.min(100, sent * 100 / total);
+    $("barFill").style.width = pct.toFixed(1) + "%";
+    setStatus($("progText"), `${pct.toFixed(0)}% · ${(sent / 1048576).toFixed(0)} of ${(total / 1048576).toFixed(0)} MB`);
+  };
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i]; lis[i].className = "run";
+    try {
+      if (s.mode === "fastbootd" && await fb.getvar("is-userspace") !== "yes") {
+        try { await fb.cmd("reboot-fastboot"); } catch (e) { log("reboot-fastboot:", e.message); }
+        await reconnect("fastbootd");
+      } else if (s.mode === "bootloader" && await fb.getvar("is-userspace") === "yes") {
+        try { await fb.cmd("reboot-bootloader"); } catch (e) { log("reboot-bootloader:", e.message); }
+        await reconnect("bootloader");
+        if (await fb.getvar("unlocked") !== "yes") throw new Error("The bootloader reports it is locked.");
+      }
+      if (s.erase) await fb.cmd("erase:" + s.erase);
+      for (const name of s.files || []) {
+        const part = s.partition.replace("{slot}", SLOT);
+        log("flash", part, "<-", name);
+        await fb.flash(part, FILES[name], onBytes);
+      }
+      if (s.reboot) { try { await fb.cmd("reboot"); } catch (e) { log("reboot:", e.message); } }
+      lis[i].className = "ok";
+    } catch (e) { lis[i].className = "bad"; throw e; }
+  }
+}
+
+/* ------------------------------------------------------------------ UI wiring */
+if (!("usb" in navigator)) { $("unsupported").hidden = false; for (let i = 1; i <= 4; i++) $("c" + i).hidden = true; }
+
+$("agree").onchange = e => activate(e.target.checked ? 2 : 1);
+$("pick").onclick = () => $("dir").click();
+$("dir").onchange = async e => {
+  setStatus($("filesStatus"), "Reading…");
+  try {
+    await loadFolder(e.target.files);
+    setStatus($("filesStatus"), `✔ ${MANIFEST.name}: all files are intact`, "ok");
+    activate(3);
+  } catch (err) { setStatus($("filesStatus"), err.message, "bad"); log("ERROR", err.message); }
+};
+$("connect").onclick = async () => {
+  setStatus($("devStatus"), "");
+  try {
+    fb = await Fastboot.request(); await fb.open();
+    const mode = await checkDevice();
+    if (mode === "fastbootd") {
+      setStatus($("devStatus"), "Tablet found in fastbootd: restarting it to the bootloader…", "warn");
+      try { await fb.cmd("reboot-bootloader"); } catch (e) {}
+      $("progress").hidden = false; await reconnect("bootloader"); $("progress").hidden = true;
+      await checkDevice();
+    }
+    setStatus($("devStatus"), `✔ Xiaomi Pad 5 connected · bootloader unlocked · slot ${SLOT}`, "ok");
+    activate(4);
+  } catch (err) {
+    if (err.name === "NotFoundError") return;          // the user closed the chooser
+    setStatus($("devStatus"), err.message, "bad"); log("ERROR", err.message);
+  }
+};
+$("install").onclick = async () => {
+  $("install").disabled = true; $("progress").hidden = false;
+  window.onbeforeunload = e => { e.preventDefault(); return ""; };
+  try {
+    await install();
+    $("barFill").style.width = "100%"; setStatus($("progText"), "100%", "ok");
+    $("c4").classList.remove("active"); $("c4").classList.add("done");
+    $("finished").hidden = false; $("finished").scrollIntoView({ behavior: "smooth" });
+  } catch (err) {
+    setStatus($("progText"), "Installation stopped: " + err.message +
+      " — The tablet can always be put back in FASTBOOT mode (hold Volume Down + Power): reload this page and start again.", "bad");
+    log("ERROR", err.message); $("install").disabled = false;
+  } finally { window.onbeforeunload = null; }
+};
+</script>
+</body>
+</html>

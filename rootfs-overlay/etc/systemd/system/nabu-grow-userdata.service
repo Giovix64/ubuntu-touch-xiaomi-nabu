@@ -1,0 +1,11 @@
+[Unit]
+Description=Estende userdata a tutta la partizione (primo avvio)
+After=local-fs.target
+Before=nabu-clicks-install.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nabu-grow-userdata
+
+[Install]
+WantedBy=multi-user.target

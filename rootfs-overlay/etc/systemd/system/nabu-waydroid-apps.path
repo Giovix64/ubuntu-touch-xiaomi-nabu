@@ -1,0 +1,9 @@
+[Unit]
+Description=Waydroid: nel drawer solo le app Android installate dall'utente
+
+[Path]
+PathChanged=/home/phablet/.local/share/applications
+Unit=nabu-waydroid-apps.service
+
+[Install]
+WantedBy=multi-user.target

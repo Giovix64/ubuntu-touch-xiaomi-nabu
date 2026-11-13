@@ -1,0 +1,12 @@
+# Installa OpenStore e le app di base al primo avvio (una volta sola).
+[Unit]
+Description=Installa i click preinstallati nabu (OpenStore e app di base)
+ConditionPathExists=!/opt/click.ubuntu.com/.nabu-preinstalled
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nabu-clicks-install
+
+[Install]
+WantedBy=multi-user.target

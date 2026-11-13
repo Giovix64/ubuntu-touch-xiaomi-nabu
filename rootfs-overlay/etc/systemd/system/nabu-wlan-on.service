@@ -1,0 +1,15 @@
+# Accende la scheda Wi-Fi (qcacld-3.0 integrato nel kernel): su Android lo fa l'HAL Wi-Fi
+# scrivendo "ON" in /dev/wlan. Riprova finché compare wlan0 (il firmware WLAN è pronto
+# qualche secondo dopo l'avvio del container Android).
+[Unit]
+Description=Accensione Wi-Fi nabu (/dev/wlan ON)
+After=lxc-android-config.service
+Wants=lxc-android-config.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'for i in $(seq 1 90); do if [ -e /sys/class/net/wlan0 ]; then exit 0; fi; [ -c /dev/wlan ] && echo ON > /dev/wlan 2>/dev/null; sleep 2; done; exit 1'
+
+[Install]
+WantedBy=multi-user.target

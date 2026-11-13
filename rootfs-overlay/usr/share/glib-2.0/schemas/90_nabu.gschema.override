@@ -1,0 +1,7 @@
+# Impostazioni predefinite nabu
+[com.lomiri.keyboard.maliit]
+theme='SuruDark'
+
+# Barra laterale: niente Telefono/Messaggi/Fotocamera (tablet senza modem; fotocamere non ancora supportate)
+[com.lomiri.Shell.Launcher]
+items=['application:///lomiri-system-settings.desktop', 'application:///morph-browser.desktop', 'appid://openstore.openstore-team/openstore/current-user-version', 'appid://filemanager.ubports/filemanager/current-user-version', 'appid://gallery.ubports/gallery/current-user-version', 'appid://calendar.ubports/calendar/current-user-version', 'appid://clock.ubports/clock/current-user-version', 'application:///lomiri-addressbook-app.desktop']

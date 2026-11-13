@@ -1,0 +1,6 @@
+[Unit]
+Description=Waydroid: nel drawer solo le app Android installate dall'utente
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nabu-waydroid-apps

@@ -1,0 +1,5 @@
+# Sovrascrive (bind-mount via halium-overlay) /vendor/etc/init/hw/init.qcom.usb.rc del vendor.
+# In fase "boot" lo script Qualcomm riconfigura il gadget USB via configfs (MTP, mass storage...)
+# mentre usb-moded di Ubuntu Touch lo sta già usando: "mtp gadget driver failed to initialize"
+# e subito dopo "Unable to handle kernel NULL pointer dereference" -> panic -> riavvio del tablet.
+# Trovato il 2026-11-12 (vedi 20261112_Primo_avvio_UT.md). La porta USB la gestisce usb-moded.

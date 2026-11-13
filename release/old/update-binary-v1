@@ -1,0 +1,80 @@
+#!/sbin/sh
+# Ubuntu Touch for Xiaomi Pad 5 (nabu) — recovery installer (TWRP / OrangeFox)
+# Flashes boot, vendor_boot, dtbo to the ACTIVE slot and installs /data/ubuntu.img.
+# Existing Ubuntu Touch user data (/data/user-data, /data/system-data) is kept: use it for updates too.
+# Never touches the bootloader lock state.
+
+OUTFD="/proc/self/fd/$2"
+ZIP="$3"
+
+ui_print() { echo "ui_print $1" > "$OUTFD"; echo "ui_print" > "$OUTFD"; }
+abort()    { ui_print " "; ui_print "!! $1"; ui_print " "; exit 1; }
+
+ui_print " "
+ui_print "*******************************************"
+ui_print "   Ubuntu Touch  -  Xiaomi Pad 5 (nabu)"
+ui_print "*******************************************"
+
+# --- device check
+DEV="$(getprop ro.product.device) $(getprop ro.build.product) $(getprop ro.product.vendor.device) $(getprop ro.boot.hwname)"
+case "$DEV" in
+    *nabu*) ui_print "- Device: Xiaomi Pad 5 (nabu)";;
+    *) abort "This zip is only for the Xiaomi Pad 5 (nabu). Found: $DEV";;
+esac
+
+# --- active slot and block devices
+SLOT="$(getprop ro.boot.slot_suffix)"
+[ -n "$SLOT" ] || SLOT="_$(getprop ro.boot.slot)"
+case "$SLOT" in _a|_b) ui_print "- Active slot: ${SLOT#_}";; *) abort "Cannot detect the active slot";; esac
+BYNAME=""
+for d in /dev/block/bootdevice/by-name /dev/block/by-name /dev/block/platform/soc/1d84000.ufshc/by-name; do
+    [ -e "$d/boot$SLOT" ] && { BYNAME="$d"; break; }
+done
+[ -n "$BYNAME" ] || abort "Cannot find the partition table (by-name)"
+
+# --- /data
+if ! grep -q " /data " /proc/mounts; then
+    mount /data 2>/dev/null || abort "Cannot mount /data. Format Data first (Wipe > Format Data > yes)."
+fi
+[ -d /data/media/0 ] && [ ! -r /data/media/0 ] && abort "/data is encrypted. Format Data first (Wipe > Format Data > yes)."
+FREE_KB=$(df -k /data | awk 'NR==2 {print $4}')
+NEED_KB=$((7 * 1024 * 1024))
+[ -f /data/ubuntu.img ] && FREE_KB=$((FREE_KB + $(du -k /data/ubuntu.img | cut -f1)))
+[ "$FREE_KB" -ge "$NEED_KB" ] || abort "Not enough space on /data (need ~7 GB)."
+
+# --- integrity of the zip content
+ui_print "- Checking images..."
+TMP=/tmp/ut-nabu; rm -rf "$TMP"; mkdir -p "$TMP"
+unzip -o -q "$ZIP" SHA256SUMS -d "$TMP" || abort "SHA256SUMS missing from the zip"
+for f in boot.img vendor_boot.img dtbo.img; do
+    unzip -o -q "$ZIP" "images/$f" -d "$TMP" || abort "images/$f missing from the zip"
+    want=$(grep " images/$f\$" "$TMP/SHA256SUMS" | cut -d" " -f1)
+    have=$(sha256sum "$TMP/images/$f" | cut -d" " -f1)
+    [ -n "$want" ] && [ "$want" = "$have" ] || abort "Checksum error on $f: corrupted download"
+done
+
+# --- boot images
+for p in boot vendor_boot dtbo; do
+    ui_print "- Flashing $p$SLOT"
+    dd if="$TMP/images/$p.img" of="$BYNAME/$p$SLOT" bs=4096 2>/dev/null || abort "Writing $p$SLOT failed"
+done
+sync
+
+# --- system image
+ui_print "- Installing Ubuntu Touch system (a few minutes)..."
+rm -f /data/ubuntu.img.new
+unzip -p "$ZIP" images/ubuntu.img.gz | gzip -dc > /data/ubuntu.img.new || abort "Unpacking ubuntu.img failed (no space?)"
+want=$(grep " images/ubuntu.img\$" "$TMP/SHA256SUMS" | cut -d" " -f1)
+if [ -n "$want" ]; then
+    have=$(sha256sum /data/ubuntu.img.new | cut -d" " -f1)
+    [ "$want" = "$have" ] || { rm -f /data/ubuntu.img.new; abort "Checksum error on ubuntu.img"; }
+fi
+mv -f /data/ubuntu.img.new /data/ubuntu.img
+chmod 644 /data/ubuntu.img
+sync
+rm -rf "$TMP"
+
+ui_print " "
+ui_print "- Done. Reboot to system: the first boot takes about a minute."
+ui_print " "
+exit 0
