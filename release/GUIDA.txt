@@ -182,14 +182,14 @@ Nota: questo port e' nato dalla cooperazione tra l'autore e un assistente IA.
  7. CODICE SORGENTE E RINGRAZIAMENTI
 ------------------------------------------------------------------------------
 
- Kernel: kernel Droidian per nabu (MarshJiang/linux-android-xiaomi-nabu, base
+ Kernel: https://github.com/Giovix64/linux-android-xiaomi-nabu (branch halium-13.0), basato sul kernel Droidian per nabu (MarshJiang, base
  ArrowOS 13.1) piu' le patch in "kernel-patches":
    - configurazione del kernel per Halium/Ubuntu Touch (con squashfs per gli snap)
    - binder: non far fallire le transazioni quando AppArmor non fornisce il secctx
    - backport di waitid(P_PIDFD) (serve a GLib / lightdm)
    - correzione di clone(CLONE_PIDFD) (serve a Qt; altrimenti la sessione viene chiusa)
    - polarita' del sensore hall della cover tastiera (tastiera a schermo)
- Adattamento del dispositivo e installer: <link del repository>
+ Adattamento del dispositivo e installer: https://github.com/Giovix64/ubuntu-touch-xiaomi-nabu
 
  Grazie a UBports e alla comunita' di Ubuntu Touch, Halium, Droidian,
  MarshJiang, ArrowOS, la comunita' linux-on-nabu e a tutti quelli che hanno

@@ -180,14 +180,14 @@ Note: this port was created by its author in cooperation with an AI assistant.
  7. SOURCE CODE AND CREDITS
 ------------------------------------------------------------------------------
 
- Kernel: Droidian nabu kernel (MarshJiang/linux-android-xiaomi-nabu,
+ Kernel: https://github.com/Giovix64/linux-android-xiaomi-nabu (branch halium-13.0), based on the Droidian nabu kernel (MarshJiang,
  ArrowOS 13.1 base) plus the patches in "kernel-patches":
    - Halium/Ubuntu Touch kernel configuration (includes squashfs for snaps)
    - binder: don't fail transactions when AppArmor can't provide a secctx
    - waitid(P_PIDFD) backport (needed by GLib / lightdm)
    - clone(CLONE_PIDFD) fix (needed by Qt; otherwise the session gets killed)
    - keyboard-cover hall sensor polarity (on-screen keyboard)
- Device adaptation and installer: <repository link>
+ Device adaptation and installer: https://github.com/Giovix64/ubuntu-touch-xiaomi-nabu
 
  Thanks to UBports and the Ubuntu Touch community, Halium, Droidian,
  MarshJiang, ArrowOS, the linux-on-nabu community and everyone who

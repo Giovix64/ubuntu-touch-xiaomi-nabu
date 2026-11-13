@@ -77,10 +77,10 @@ Flash the HyperOS fastboot ROM with Xiaomi's `flash_all.sh` (not `flash_all_lock
 
 ## Source code
 
-- Kernel: Droidian nabu kernel (`MarshJiang/linux-android-xiaomi-nabu`, ArrowOS 13.1 base) plus the
+- Kernel: https://github.com/Giovix64/linux-android-xiaomi-nabu (branch halium-13.0) — the Droidian nabu kernel (`MarshJiang/linux-android-xiaomi-nabu`, ArrowOS 13.1 base) plus the
   patches in `kernel-patches/` (Halium config, binder secctx with AppArmor, `waitid(P_PIDFD)` backport,
   `CLONE_PIDFD` fix, keyboard-cover hall polarity).
-- Device adaptation, build scripts and this installer: *repository link to be added*.
+- Device adaptation, build scripts and this installer: https://github.com/Giovix64/ubuntu-touch-xiaomi-nabu.
 
 ## Credits
 

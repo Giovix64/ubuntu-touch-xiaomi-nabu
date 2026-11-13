@@ -33,9 +33,9 @@ boot-time firmware reload resets it — details in the repo.
 
 ## Install
 fastboot installer script (checks device/unlock state, never locks) and a TWRP/OrangeFox zip for updates.
-Links: *to be added*
+Download: https://github.com/Giovix64/ubuntu-touch-xiaomi-nabu/releases
 
 ## Source
-Kernel: *link*, device repo: *link*
+Kernel: https://github.com/Giovix64/linux-android-xiaomi-nabu (branch halium-13.0) — device repo: https://github.com/Giovix64/ubuntu-touch-xiaomi-nabu
 
 Feedback and testers welcome!
